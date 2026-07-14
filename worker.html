@@ -16,30 +16,52 @@
 </head>
 <body>
 
+    <!-- Top Header -->
     <header class="main-header">
-        <h1>Field Operative Panel</h1>
-        <!-- Simple dropdown to switch between the 6 workers for testing -->
-        <select id="workerIdentity" class="leader-badge" style="background:#1e293b; color:#f8fafc; border:1px solid #334155;" onchange="listenForJobs()">
-            <option value="Worker 1">Worker 1</option>
-            <option value="Worker 2">Worker 2</option>
-            <option value="Worker 3">Worker 3</option>
-            <option value="Worker 4">Worker 4</option>
-            <option value="Worker 5">Worker 5</option>
-            <option value="Worker 6">Worker 6</option>
-        </select>
+        <h1>Operative Terminal</h1>
+        <div class="worker-badge">Role: Field Agent</div>
     </header>
 
     <div class="dashboard-container max-width-small">
         
-        <!-- Job Notification Card -->
-        <div id="jobCard" class="status-box secure-state" style="background-color: #1e293b; border-color: #334155;">
-            <div id="jobIcon" style="font-size: 3rem; margin-bottom: 15px;">💤</div>
-            <h2 id="jobTitle">Awaiting Assignment</h2>
-            <p id="jobDetails">You are currently on standby. Updates from HQ will appear here in real-time.</p>
+        <!-- Identity Selector Card -->
+        <section class="card-section">
+            <h2>Select Your Identity</h2>
+            <div class="form-group">
+                <label for="workerIdentity">Who is operating this terminal?</label>
+                <select id="workerIdentity" onchange="listenForJobs()">
+                    <option value="" disabled selected>-- Select Identity --</option>
+                    <option value="Worker 1">Worker 1</option>
+                    <option value="Worker 2">Worker 2</option>
+                    <option value="Worker 3">Worker 3</option>
+                    <option value="Worker 4">Worker 4</option>
+                    <option value="Worker 5">Worker 5</option>
+                    <option value="Worker 6">Worker 6</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Dynamic Status/Deployment Alert Card -->
+        <section class="card-section" id="statusCard" style="text-align: center; border-left: 5px solid #64748b;">
+            <h2 id="statusTitle">Standby Mode</h2>
+            <p id="statusDescription" style="color: var(--text-muted);">Please select your identity above to check for assignments.</p>
+        </section>
+
+        <!-- 💬 Chat Window UI (Hidden until assigned) -->
+        <div id="workerChatSection" class="card-section" style="display: none; margin-top: 20px;">
+            <h3>💬 Secure Comms Channel</h3>
+            <div id="workerChatBox" style="height: 200px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;">
+                <!-- Messages appear here -->
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="workerChatMessage" placeholder="Type tactical update..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;">
+                <button id="workerSendBtn" class="btn btn-approve" style="padding: 10px 20px;">Send</button>
+            </div>
         </div>
 
     </div>
 
+    <!-- Firebase System Modules -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
@@ -47,68 +69,114 @@
         // ⚠️ PASTE YOUR EXACT FIREBASE CONFIG OBJECT HERE
         const firebaseConfig = {
             apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
-        authDomain: "vanguard-prime.firebaseapp.com",
-        databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "vanguard-prime",
-        storageBucket: "vanguard-prime.firebasestorage.app",
-
+            authDomain: "vanguard-prime.firebaseapp.com",
+            databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "vanguard-prime",
+            storageBucket: "vanguard-prime.firebasestorage.app",
         };
         
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        let currentActiveListener = null;
+        let currentActiveJobId = null;
+        let currentRef = null;
 
         function listenForJobs() {
-            const selectedWorker = document.getElementById('workerIdentity').value;
-            
-            // Turn off old listener if switching workers
-            if (currentActiveListener) {
-                database.ref('requests').off('value', currentActiveListener);
+            const chosenWorker = document.getElementById('workerIdentity').value;
+            if (!chosenWorker) return;
+
+            // Disconnect old active listeners if switching workers
+            if (currentRef) {
+                currentRef.off();
             }
 
-            // Listen for any active approved jobs for THIS worker
-            currentActiveListener = database.ref('requests').on('value', (snapshot) => {
-                const requests = snapshot.val();
-                let activeJob = null;
+            const statusCard = document.getElementById('statusCard');
+            const statusTitle = document.getElementById('statusTitle');
+            const statusDescription = document.getElementById('statusDescription');
+            const chatSection = document.getElementById('workerChatSection');
 
-                // Look through all requests in the cloud database
-                for (let id in requests) {
-                    if (requests[id].worker === selectedWorker && requests[id].status === 'approved') {
-                        activeJob = requests[id];
-                        break; 
+            // Listen to data shifts inside the requests path
+            currentRef = database.ref('requests');
+            currentRef.on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                let assignedJob = null;
+                let assignedId = null;
+
+                // Scan database entries to find an active match for this operative identity
+                for (let id in data) {
+                    if (data[id].worker === chosenWorker && data[id].status === 'approved') {
+                        assignedJob = data[id];
+                        assignedId = id;
+                        break;
                     }
                 }
 
-                const jobCard = document.getElementById('jobCard');
-                const jobIcon = document.getElementById('jobIcon');
-                const jobTitle = document.getElementById('jobTitle');
-                const jobDetails = document.getElementById('jobDetails');
-
-                if (activeJob) {
-                    // Flash dynamic blue layout notification when assigned
-                    jobCard.style.backgroundColor = "#1e3a8a"; 
-                    jobCard.style.borderColor = "#3b82f6";
-                    jobIcon.innerText = "📅";
-                    jobTitle.innerText = "NEW ASSIGNMENT DIRECTIVE";
-                    jobDetails.innerHTML = `
-                        <strong>Client:</strong> ${activeJob.client}<br>
-                        <strong>Location Deployment:</strong> ${activeJob.location}<br><br>
-                        <span style="font-size:0.9rem; color:#94a3b8;">Proceed to destination immediately. Maintain radio contact.</span>
+                if (assignedJob) {
+                    // Update main panel UI to Active Deployment mode
+                    statusCard.style.borderLeft = "5px solid #eab308"; // Warning Yellow
+                    statusTitle.innerText = "🚨 ACTIVE DEPLOYMENT";
+                    statusDescription.innerHTML = `
+                        <strong>Client:</strong> ${assignedJob.client}<br>
+                        <strong>Location:</strong> ${assignedJob.location}
                     `;
+                    
+                    // Activate and wire up the secure walkie-talkie chat channel
+                    setupWorkerChat(assignedId, chosenWorker);
                 } else {
-                    // Reset to standby layout mode
-                    jobCard.style.backgroundColor = "#1e293b";
-                    jobCard.style.borderColor = "#334155";
-                    jobIcon.innerText = "💤";
-                    jobTitle.innerText = "Awaiting Assignment";
-                    jobDetails.innerText = "You are currently on standby. Updates from HQ will appear here in real-time.";
+                    // Revert to Standby mode
+                    statusCard.style.borderLeft = "5px solid #22c55e"; // Available Green
+                    statusTitle.innerText = "🟢 Available / Standby";
+                    statusDescription.innerText = "Awaiting deployment orders from Command HQ...";
+                    
+                    // Kill chat monitoring and hide the element away
+                    chatSection.style.display = 'none';
+                    currentActiveJobId = null;
+                    database.ref(`chats/${currentActiveJobId}`).off();
                 }
             });
         }
 
-        // Run automatically on startup
-        listenForJobs();
+        function setupWorkerChat(requestId, workerName) {
+            // Avoid resetting listeners if we are already connected to this job channel
+            if (currentActiveJobId === requestId) return;
+            currentActiveJobId = requestId;
+
+            const chatSection = document.getElementById('workerChatSection');
+            const chatBox = document.getElementById('workerChatBox');
+            
+            chatSection.style.display = 'block';
+            chatBox.innerHTML = ""; // Wipe clean slate for new messages
+            
+            // Clean older hooks
+            database.ref(`chats/${currentActiveJobId}`).off();
+
+            // Stream newly arriving logs down into view container
+            database.ref(`chats/${currentActiveJobId}`).on('child_added', (snapshot) => {
+                const msg = snapshot.val();
+                const isMe = (msg.sender === workerName);
+                
+                chatBox.innerHTML += `
+                    <p style="margin: 5px 0; color: ${isMe ? '#10b981' : '#3b82f6'}">
+                        <strong>${msg.sender}:</strong> ${msg.text}
+                    </p>
+                `;
+                chatBox.scrollTop = chatBox.scrollHeight; // Keep view locked to recent entries
+            });
+
+            // Re-bind the Send button click specifically for this job environment
+            document.getElementById('workerSendBtn').onclick = function() {
+                const msgInput = document.getElementById('workerChatMessage');
+                const text = msgInput.value.trim();
+                if (!text || !currentActiveJobId) return;
+
+                database.ref(`chats/${currentActiveJobId}`).push({
+                    sender: workerName,
+                    text: text,
+                    timestamp: Date.now()
+                });
+                msgInput.value = "";
+            };
+        }
     </script>
 </body>
 </html>
