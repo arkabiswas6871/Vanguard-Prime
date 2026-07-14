@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guard Security Terminal</title>
+    <!-- Tell the phone this is an installable app -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1e293b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<script>
+  // Register the background service worker script
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Top Header -->
+    <header class="main-header">
+        <h1>Guard Response Terminal</h1>
+        <div class="guard-badge">Role: Tactical Guard</div>
+    </header>
+
+    <div class="dashboard-container">
+        
+        <!-- Main Real-time Status Area -->
+        <div id="statusBox" class="status-box secure-state">
+            <div id="statusIcon" class="status-icon">🛡️</div>
+            <h2 id="statusTitle">ALL SYSTEMS SECURE</h2>
+            <p id="statusMessage">Standing by for coordinator dispatch instructions. No active alerts.</p>
+            
+            <!-- Clear Alarm Button (Visible only during alerts) -->
+            <button id="clearBtn" class="btn btn-decline" style="display: none; margin-top: 20px;" onclick="resetTerminal()">
+                Dismiss & Reset Alert
+            </button>
+        </div>
+
+        <!-- Deployment Reference Data -->
+        <section class="card-section">
+            <h2>Current Shift Reference</h2>
+            <div class="info-table-container">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #334155; color: var(--text-muted);">
+                            <th style="padding: 10px 0;">Post / Duty</th>
+                            <th>Assigned Unit</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid #1e293b;">
+                            <td style="padding: 12px 0;">HQ Perimeter Patrolling</td>
+                            <td>Guard Unit 1 (You)</td>
+                            <td style="color: var(--color-available);">Active</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 12px 0;">Field Force Support</td>
+                            <td>Workers 1-6</td>
+                            <td style="color: var(--color-busy);">On Call</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+<script>
+    // ⚠️ Use the same configuration details here
+    const firebaseConfig = {
+        apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
+        authDomain: "vanguard-prime.firebaseapp.com",
+        databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "vanguard-prime",
+        storageBucket: "vanguard-prime.firebasestorage.app",
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Listen for changes in the database alert system
+    database.ref('securityAlert').on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        if (data && data.active === true) {
+            triggerAlarm(data.worker, data.client);
+        } else {
+            resetTerminalUI();
+        }
+    });
+
+    function triggerAlarm(worker, client) {
+        document.getElementById('statusBox').className = "status-box alert-state";
+        document.getElementById('statusIcon').innerText = "🚨";
+        document.getElementById('statusTitle').innerText = "EMERGENCY DISPATCH INCOMING";
+        document.getElementById('statusMessage').innerHTML = `
+            <strong>VIOLENT CLIENT DETECTED!</strong><br><br>
+            <strong>Target Objective:</strong> Protect ${worker}<br>
+            <strong>Threat Source:</strong> Client (${client})
+        `;
+        document.getElementById('clearBtn').style.display = "inline-block";
+    }
+
+    function resetTerminal() {
+        // Clear emergency status directly inside the cloud node
+        database.ref('securityAlert').set({ active: false });
+    }
+
+    function resetTerminalUI() {
+        document.getElementById('statusBox').className = "status-box secure-state";
+        document.getElementById('statusIcon').innerText = "🛡️";
+        document.getElementById('statusTitle').innerText = "ALL SYSTEMS SECURE";
+        document.getElementById('statusMessage').innerText = "Standing by for coordinator dispatch instructions.";
+        document.getElementById('clearBtn').style.display = "none";
+    }
+</script>
+</body>
+</html>

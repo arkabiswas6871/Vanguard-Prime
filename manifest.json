@@ -1,0 +1,16 @@
+{
+  "short_name": "HQ Security",
+  "name": "HQ Security Command Center",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1014/1014280.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/client.html",
+  "background_color": "#121824",
+  "theme_color": "#1e293b",
+  "display": "standalone",
+  "orientation": "portrait"
+}

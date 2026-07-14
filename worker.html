@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Assignment Panel</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="main-header">
+        <h1>Field Operative Panel</h1>
+        <!-- Simple dropdown to switch between the 6 workers for testing -->
+        <select id="workerIdentity" class="leader-badge" style="background:#1e293b; color:#f8fafc; border:1px solid #334155;" onchange="listenForJobs()">
+            <option value="Worker 1">Worker 1</option>
+            <option value="Worker 2">Worker 2</option>
+            <option value="Worker 3">Worker 3</option>
+            <option value="Worker 4">Worker 4</option>
+            <option value="Worker 5">Worker 5</option>
+            <option value="Worker 6">Worker 6</option>
+        </select>
+    </header>
+
+    <div class="dashboard-container max-width-small">
+        
+        <!-- Job Notification Card -->
+        <div id="jobCard" class="status-box secure-state" style="background-color: #1e293b; border-color: #334155;">
+            <div id="jobIcon" style="font-size: 3rem; margin-bottom: 15px;">💤</div>
+            <h2 id="jobTitle">Awaiting Assignment</h2>
+            <p id="jobDetails">You are currently on standby. Updates from HQ will appear here in real-time.</p>
+        </div>
+
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <script>
+        // ⚠️ PASTE YOUR EXACT FIREBASE CONFIG OBJECT HERE
+        const firebaseConfig = {
+            apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
+        authDomain: "vanguard-prime.firebaseapp.com",
+        databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "vanguard-prime",
+        storageBucket: "vanguard-prime.firebasestorage.app",
+
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let currentActiveListener = null;
+
+        function listenForJobs() {
+            const selectedWorker = document.getElementById('workerIdentity').value;
+            
+            // Turn off old listener if switching workers
+            if (currentActiveListener) {
+                database.ref('requests').off('value', currentActiveListener);
+            }
+
+            // Listen for any active approved jobs for THIS worker
+            currentActiveListener = database.ref('requests').on('value', (snapshot) => {
+                const requests = snapshot.val();
+                let activeJob = null;
+
+                // Look through all requests in the cloud database
+                for (let id in requests) {
+                    if (requests[id].worker === selectedWorker && requests[id].status === 'approved') {
+                        activeJob = requests[id];
+                        break; 
+                    }
+                }
+
+                const jobCard = document.getElementById('jobCard');
+                const jobIcon = document.getElementById('jobIcon');
+                const jobTitle = document.getElementById('jobTitle');
+                const jobDetails = document.getElementById('jobDetails');
+
+                if (activeJob) {
+                    // Flash dynamic blue layout notification when assigned
+                    jobCard.style.backgroundColor = "#1e3a8a"; 
+                    jobCard.style.borderColor = "#3b82f6";
+                    jobIcon.innerText = "📅";
+                    jobTitle.innerText = "NEW ASSIGNMENT DIRECTIVE";
+                    jobDetails.innerHTML = `
+                        <strong>Client:</strong> ${activeJob.client}<br>
+                        <strong>Location Deployment:</strong> ${activeJob.location}<br><br>
+                        <span style="font-size:0.9rem; color:#94a3b8;">Proceed to destination immediately. Maintain radio contact.</span>
+                    `;
+                } else {
+                    // Reset to standby layout mode
+                    jobCard.style.backgroundColor = "#1e293b";
+                    jobCard.style.borderColor = "#334155";
+                    jobIcon.innerText = "💤";
+                    jobTitle.innerText = "Awaiting Assignment";
+                    jobDetails.innerText = "You are currently on standby. Updates from HQ will appear here in real-time.";
+                }
+            });
+        }
+
+        // Run automatically on startup
+        listenForJobs();
+    </script>
+</body>
+</html>

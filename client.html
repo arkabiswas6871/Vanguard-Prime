@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Booking Portal</title>
+    <!-- Tell the phone this is an installable app -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <script>
+  // Register the background service worker script
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Top Header -->
+    <header class="main-header">
+        <h1>Premium Dispatch Services</h1>
+        <div class="client-badge">Client Portal</div>
+    </header>
+
+    <div class="dashboard-container max-width-small">
+        
+        <!-- Booking Form Card -->
+        <section class="card-section">
+            <h2>Request a Professional Worker</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
+                Please select an available worker and provide your assignment details. Your request will be evaluated by HQ instantly.
+            </p>
+
+            <form id="bookingForm" onsubmit="submitRequest(event)">
+                <div class="form-group">
+                    <label for="clientName">Your Name / Company</label>
+                    <input type="text" id="clientName" required placeholder="e.g., John Doe">
+                </div>
+
+                <div class="form-group">
+                    <label for="workerSelect">Select Available Worker</label>
+                    <select id="workerSelect" required>
+                        <option value="" disabled selected>-- Choose an operative --</option>
+                        <option value="Worker 1">Worker 1 (Available)</option>
+                        <option value="Worker 2">Worker 2 (Available)</option>
+                        <option value="Worker 4">Worker 4 (Available)</option>
+                        <option value="Worker 5">Worker 5 (Available)</option>
+                        <option value="Worker 6">Worker 6 (Available)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="locationInput">Deployment Location</label>
+                    <input type="text" id="locationInput" required placeholder="e.g., Sector 4, Plaza Suite B">
+                </div>
+
+                <button type="submit" class="btn btn-approve" style="width: 100%; padding: 12px; margin-top: 10px; font-size: 1rem;">
+                    Submit Hire Request
+                </button>
+            </form>
+        </section>
+
+        <!-- Live Status Tracking Area -->
+        <div id="trackingStatus" class="tracking-card" style="display: none;">
+            <h3>📋 Live Request Tracking</h3>
+            <div class="status-timeline">
+                <div class="timeline-step done">✓ Request Sent</div>
+                <div id="leaderStep" class="timeline-step pending">⏳ Awaiting Leader Approval...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Include Firebase SDK Apps and Realtime Database modules -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+<script>
+    // ⚠️ REPLACE THIS CONFIGURATION with the exact values from your Firebase Console Project Settings!
+    const firebaseConfig = {
+        apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
+        authDomain: "vanguard-prime.firebaseapp.com",
+        databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "vanguard-prime",
+        storageBucket: "vanguard-prime.firebasestorage.app",
+    };
+    
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    function submitRequest(event) {
+        event.preventDefault();
+        
+        const name = document.getElementById('clientName').value;
+        const worker = document.getElementById('workerSelect').value;
+        const location = document.getElementById('locationInput').value;
+
+        // 1. Send request payload to Firebase under a 'requests' node
+        const requestRef = database.ref('requests');
+        const newRequestRef = requestRef.push(); // Generates a unique ID
+        
+        newRequestRef.set({
+            client: name,
+            worker: worker,
+            location: location,
+            status: 'pending',
+            timestamp: Date.now()
+        });
+
+        // Update local UI state
+        document.getElementById('bookingForm').reset();
+        document.getElementById('trackingStatus').style.display = 'block';
+
+        // 2. Listen in real-time for the Leader's decision on this specific request
+        newRequestRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            const leaderStep = document.getElementById('leaderStep');
+            if (data.status === 'approved') {
+                leaderStep.className = "timeline-step approved";
+                leaderStep.innerText = `✅ Approved! ${data.worker} is dispatched to your location.`;
+            } else if (data.status === 'declined') {
+                leaderStep.className = "timeline-step declined";
+                leaderStep.innerText = `❌ Declined: Operative is unavailable.`;
+            }
+        });
+    }
+</script>
+</body>
+</html>
