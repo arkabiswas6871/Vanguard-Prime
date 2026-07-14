@@ -50,8 +50,20 @@
                     <!-- Dynamic Active Deployments go here -->
                 </div>
             </section>
-
         </div>
+
+        <!-- 💬 HQ Comms Intel Monitor -->
+        <section class="card-section" id="leaderChatSection" style="margin-top:20px; display:none;">
+            <h2 id="chatMonitorTitle">📡 Operational Comms Intel Link</h2>
+            <div id="leaderChatBox" style="height: 220px; overflow-y: auto; background: #0f172a; padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;">
+                <!-- Monitored client/worker text flow goes here -->
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="leaderChatMessage" placeholder="Broadcast directive order to channel..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;">
+                <button id="leaderSendBtn" class="btn btn-approve" style="padding: 10px 20px; background:#6366f1;">HQ Broadcast</button>
+            </div>
+        </section>
+
     </div>
 
     <!-- Firebase System Modules -->
@@ -59,39 +71,35 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
     <script>
-        // ⚠️ PASTE YOUR EXACT FIREBASE CONFIG OBJECT HERE
         const firebaseConfig = {
             apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
-        authDomain: "vanguard-prime.firebaseapp.com",
-        databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
-        projectId: "vanguard-prime",
-        storageBucket: "vanguard-prime.firebasestorage.app",
-
+            authDomain: "vanguard-prime.firebaseapp.com",
+            databaseURL: "https://vanguard-prime-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "vanguard-prime",
+            storageBucket: "vanguard-prime.firebasestorage.app",
         };
         
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // 1. Core State Array for tracking our 6 workers
         const workersList = ["Worker 1", "Worker 2", "Worker 3", "Worker 4", "Worker 5", "Worker 6"];
+        
+        let activeMonitorJobId = null;
+        let leaderChatRef = null;
 
-        // 2. Listen to the entire 'requests' node to update Grid and Playbooks in real-time
         database.ref('requests').on('value', (snapshot) => {
             const data = snapshot.val() || {};
             
-            // Clear out current UI lists to redraw clean updated states
             document.getElementById('pendingList').innerHTML = "";
             document.getElementById('activeList').innerHTML = "";
             
-            // Create an object map to see who is currently busy
             let busyWorkers = {};
+            let monitoredJobStillActive = false;
 
-            // Loop through all data records in cloud database
             for (let id in data) {
                 const item = data[id];
                 
                 if (item.status === 'pending') {
-                    // Inject into Pending List UI
                     const reqItem = document.createElement('div');
                     reqItem.className = 'request-item';
                     reqItem.innerHTML = `
@@ -109,10 +117,9 @@
                 } 
                 
                 else if (item.status === 'approved') {
-                    // Mark this specific worker as busy with this client
                     busyWorkers[item.worker] = { client: item.client, location: item.location };
+                    if(id === activeMonitorJobId) monitoredJobStillActive = true;
 
-                    // Inject into Active Operations Monitor list
                     const activeItem = document.createElement('div');
                     activeItem.className = 'active-item';
                     activeItem.innerHTML = `
@@ -120,17 +127,24 @@
                             <strong>${item.worker}</strong> deployed with <em>${item.client}</em>
                             <div class="location">Location: ${item.location}</div>
                         </div>
-                        <!-- Pass the dynamic current worker and violent client data straight into the function context -->
-                        <button class="btn btn-panic" onclick="alertGuard('${item.worker}', '${item.client}')">⚠️ Alert Guard</button>
-                        <button class="btn btn-decline" style="margin-left:8px; background:#475569;" onclick="completeJob('${id}')">Finish</button>
+                        <div style="margin-top:8px;">
+                            <button class="btn btn-approve" style="background:#6366f1; padding:4px 8px; font-size:0.85rem;" onclick="monitorChat('${id}', '${item.worker}')">👁️ Monitor Chat</button>
+                            <button class="btn btn-panic" style="padding:4px 8px; font-size:0.85rem;" onclick="alertGuard('${item.worker}', '${item.client}')">⚠️ Alert Guard</button>
+                            <button class="btn btn-decline" style="padding:4px 8px; font-size:0.85rem; background:#475569;" onclick="completeJob('${id}')">Finish</button>
+                        </div>
                     `;
                     document.getElementById('activeList').appendChild(activeItem);
                 }
             }
 
-            // 3. Redraw the Main 6-Worker Force Grid based on current live states
+            if(!monitoredJobStillActive) {
+                document.getElementById('leaderChatSection').style.display = "none";
+                activeMonitorJobId = null;
+                if(leaderChatRef) leaderChatRef.off();
+            }
+
             const gridContainer = document.getElementById('statusGrid');
-            gridContainer.innerHTML = ""; // Clear grid
+            gridContainer.innerHTML = "";
 
             workersList.forEach(workerName => {
                 const isBusy = busyWorkers[workerName];
@@ -155,21 +169,53 @@
             });
         });
 
-        // 4. Update request status flag inside Firebase
+        function monitorChat(requestId, workerName) {
+            activeMonitorJobId = requestId;
+            document.getElementById('leaderChatSection').style.display = "block";
+            document.getElementById('chatMonitorTitle').innerText = `📡 Intel Link: Intercepting ${workerName}`;
+            
+            const chatBox = document.getElementById('leaderChatBox');
+            chatBox.innerHTML = "";
+
+            if(leaderChatRef) leaderChatRef.off();
+
+            leaderChatRef = database.ref(`chats/${activeMonitorJobId}`);
+            leaderChatRef.on('child_added', (snapshot) => {
+                const msg = snapshot.val();
+                let color = "#3b82f6"; // default client
+                if(msg.sender.includes("Worker")) color = "#10b981";
+                if(msg.sender === "HQ Leader") color = "#6366f1";
+
+                chatBox.innerHTML += `<p style="margin: 5px 0; color: ${color}"><strong>${msg.sender}:</strong> ${msg.text}</p>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+
+            document.getElementById('leaderSendBtn').onclick = function() {
+                const msgInput = document.getElementById('leaderChatMessage');
+                const text = msgInput.value.trim();
+                if (!text || !activeMonitorJobId) return;
+
+                database.ref(`chats/${activeMonitorJobId}`).push({
+                    sender: "HQ Leader",
+                    text: text,
+                    timestamp: Date.now()
+                });
+                msgInput.value = "";
+            };
+        }
+
         function handleDecision(requestId, decisionStatus) {
             database.ref(`requests/${requestId}`).update({
                 status: decisionStatus
             });
         }
 
-        // 5. Complete Job execution logic to set worker back to free/standby
         function completeJob(requestId) {
             database.ref(`requests/${requestId}`).update({
                 status: 'completed'
             });
         }
 
-        // 6. Emergency Broadcast system maps client parameters straight to Guard View cloud nodes
         function alertGuard(workerName, clientName) {
             database.ref('securityAlert').set({
                 worker: workerName,
