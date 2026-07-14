@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
 
     <script>
-  // Register the background service worker script
+      // Register the background service worker script
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
       }
@@ -72,6 +72,18 @@
             </div>
         </div>
 
+        <!-- Chat Window UI (Hidden until approved) -->
+        <div id="chatSection" class="card-section" style="display: none; margin-top: 20px;">
+            <h3>💬 Live Chat with Operative</h3>
+            <div id="chatBox" style="height: 200px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;">
+                <!-- Messages appear here -->
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="chatMessage" placeholder="Type a message..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;">
+                <button onclick="sendChatMessage('Client')" class="btn btn-approve" style="padding: 10px 20px;">Send</button>
+            </div>
+        </div>
+
     </div>
 
     <!-- Include Firebase SDK Apps and Realtime Database modules -->
@@ -79,7 +91,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
 <script>
-    // ⚠️ REPLACE THIS CONFIGURATION with the exact values from your Firebase Console Project Settings!
     const firebaseConfig = {
         apiKey: "AIzaSyDpStX4DPOjGItmM1_euYkBkHHBOyjNhlU",
         authDomain: "vanguard-prime.firebaseapp.com",
@@ -88,7 +99,6 @@
         storageBucket: "vanguard-prime.firebasestorage.app",
     };
     
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
@@ -99,9 +109,8 @@
         const worker = document.getElementById('workerSelect').value;
         const location = document.getElementById('locationInput').value;
 
-        // 1. Send request payload to Firebase under a 'requests' node
         const requestRef = database.ref('requests');
-        const newRequestRef = requestRef.push(); // Generates a unique ID
+        const newRequestRef = requestRef.push();
         
         newRequestRef.set({
             client: name,
@@ -111,11 +120,9 @@
             timestamp: Date.now()
         });
 
-        // Update local UI state
         document.getElementById('bookingForm').reset();
         document.getElementById('trackingStatus').style.display = 'block';
 
-        // 2. Listen in real-time for the Leader's decision on this specific request
         newRequestRef.on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) return;
@@ -124,56 +131,52 @@
             if (data.status === 'approved') {
                 leaderStep.className = "timeline-step approved";
                 leaderStep.innerText = `✅ Approved! ${data.worker} is dispatched to your location.`;
+                
+                // ⚡ FIX: Turn on the chat view automatically once approved!
+                enableChat(snapshot.key);
             } else if (data.status === 'declined') {
                 leaderStep.className = "timeline-step declined";
                 leaderStep.innerText = `❌ Declined: Operative is unavailable.`;
+                document.getElementById('chatSection').style.display = 'none';
+            } else if (data.status === 'completed') {
+                document.getElementById('chatSection').style.display = 'none';
             }
         });
     }
+
+    let activeJobId = null;
+    let chatListenerRef = null;
+
+    function enableChat(requestId) {
+        if (activeJobId === requestId) return;
+        activeJobId = requestId;
+        
+        document.getElementById('chatSection').style.display = 'block';
+        const chatBox = document.getElementById('chatBox');
+        chatBox.innerHTML = ""; 
+
+        if (chatListenerRef) chatListenerRef.off();
+
+        chatListenerRef = database.ref(`chats/${activeJobId}`);
+        chatListenerRef.on('child_added', (snapshot) => {
+            const msg = snapshot.val();
+            chatBox.innerHTML += `<p style="margin: 5px 0; color: ${msg.sender === 'Client' ? '#3b82f6' : '#10b981'}"><strong>${msg.sender}:</strong> ${msg.text}</p>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+    }
+
+    function sendChatMessage(senderName) {
+        const msgInput = document.getElementById('chatMessage');
+        const text = msgInput.value.trim();
+        if (!text || !activeJobId) return;
+
+        database.ref(`chats/${activeJobId}`).push({
+            sender: senderName,
+            text: text,
+            timestamp: Date.now()
+        });
+        msgInput.value = "";
+    }
 </script>
-    <!-- Chat Window UI (Hidden until approved) -->
-    <div id="chatSection" class="card-section" style="display: none; margin-top: 20px;">
-        <h3>💬 Live Chat with Operative</h3>
-        <div id="chatBox" style="height: 200px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;">
-            <!-- Messages appear here -->
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <input type="text" id="chatMessage" placeholder="Type a message..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;">
-            <button onclick="sendChatMessage('Client')" class="btn btn-approve" style="padding: 10px 20px;">Send</button>
-        </div>
-    </div>
-
-    <script>
-        // Track the current active job ID for messaging
-        let activeJobId = null;
-
-        // Modify your existing newRequestRef.on('value') listener logic to include this:
-        // (Add this inside your existing script where it checks if status === 'approved')
-        function enableChat(requestId) {
-            activeJobId = requestId;
-            document.getElementById('chatSection').style.display = 'block';
-            
-            // Listen for new messages for this specific job
-            database.ref(`chats/${activeJobId}`).on('child_added', (snapshot) => {
-                const msg = snapshot.val();
-                const chatBox = document.getElementById('chatBox');
-                chatBox.innerHTML += `<p style="margin: 5px 0; color: ${msg.sender === 'Client' ? '#3b82f6' : '#10b981'}"><strong>${msg.sender}:</strong> ${msg.text}</p>`;
-                chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll to bottom
-            });
-        }
-
-        function sendChatMessage(senderName) {
-            const msgInput = document.getElementById('chatMessage');
-            const text = msgInput.value.trim();
-            if (!text || !activeJobId) return;
-
-            database.ref(`chats/${activeJobId}`).push({
-                sender: senderName,
-                text: text,
-                timestamp: Date.now()
-            });
-            msgInput.value = "";
-        }
-    </script>
 </body>
 </html>
