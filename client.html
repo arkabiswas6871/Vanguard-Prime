@@ -131,5 +131,49 @@
         });
     }
 </script>
+    <!-- Chat Window UI (Hidden until approved) -->
+    <div id="chatSection" class="card-section" style="display: none; margin-top: 20px;">
+        <h3>💬 Live Chat with Operative</h3>
+        <div id="chatBox" style="height: 200px; overflow-y: auto; background: #0f172a; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #334155;">
+            <!-- Messages appear here -->
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="chatMessage" placeholder="Type a message..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #334155; background: #1e293b; color: white;">
+            <button onclick="sendChatMessage('Client')" class="btn btn-approve" style="padding: 10px 20px;">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Track the current active job ID for messaging
+        let activeJobId = null;
+
+        // Modify your existing newRequestRef.on('value') listener logic to include this:
+        // (Add this inside your existing script where it checks if status === 'approved')
+        function enableChat(requestId) {
+            activeJobId = requestId;
+            document.getElementById('chatSection').style.display = 'block';
+            
+            // Listen for new messages for this specific job
+            database.ref(`chats/${activeJobId}`).on('child_added', (snapshot) => {
+                const msg = snapshot.val();
+                const chatBox = document.getElementById('chatBox');
+                chatBox.innerHTML += `<p style="margin: 5px 0; color: ${msg.sender === 'Client' ? '#3b82f6' : '#10b981'}"><strong>${msg.sender}:</strong> ${msg.text}</p>`;
+                chatBox.scrollTop = chatBox.scrollHeight; // Auto scroll to bottom
+            });
+        }
+
+        function sendChatMessage(senderName) {
+            const msgInput = document.getElementById('chatMessage');
+            const text = msgInput.value.trim();
+            if (!text || !activeJobId) return;
+
+            database.ref(`chats/${activeJobId}`).push({
+                sender: senderName,
+                text: text,
+                timestamp: Date.now()
+            });
+            msgInput.value = "";
+        }
+    </script>
 </body>
 </html>
